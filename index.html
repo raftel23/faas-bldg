@@ -1836,77 +1836,25 @@
       }
 
       /* ------------------------------------------------------------------------
-         11. SEED MOCK DATA SCRIPT (FOR IMMEDIATE 10-ITEM PAGINATION DEMO)
+         11. LEGACY MOCK DATA CLEANUP (ENSURES PURE REAL DATA)
          ------------------------------------------------------------------------ */
-      async function seedInitialDataIfEmpty() {
-        const count = await db.assessments.count();
-        if (count > 0) return;
-
-        console.info('Seeding mock FAAS data for pagination demonstration...');
-
-        const mockOwners = [
-          'Eduardo M. Santos', 'Maria Clara Bautista', 'Antonio L. Luna',
-          'Lourdes V. Reyes', 'Francisco K. Balagtas', 'Corazon A. Aquino',
-          'Josefa Llanes Escoda', 'Ramon F. Magsaysay', 'Apolinario M. Mabini',
-          'Melchora I. Aquino', 'Teodoro A. Agoncillo', 'Gregorio H. Del Pilar',
-          'Teresa M. Magbanua', 'Emilio F. Aguinaldo'
-        ];
-
-        const sampleRecords = [];
-        const baseTime = Date.now() - (mockOwners.length * 3600 * 1000 * 4);
-
-        for (let i = 0; i < mockOwners.length; i++) {
-          const numFloors = (i % 3) + 1; // 1, 2, or 3 floors
-          const baseAreaPerFloor = Math.round(((80 + (i * 15)) / numFloors) * 100) / 100;
-          const floorAreas = [];
-          for (let f = 0; f < numFloors; f++) {
-            floorAreas.push(baseAreaPerFloor);
+      async function clearLegacyMockData() {
+        try {
+          const mockNames = new Set([
+            'Eduardo M. Santos', 'Maria Clara Bautista', 'Antonio L. Luna',
+            'Lourdes V. Reyes', 'Francisco K. Balagtas', 'Corazon A. Aquino',
+            'Josefa Llanes Escoda', 'Ramon F. Magsaysay', 'Apolinario M. Mabini',
+            'Melchora I. Aquino', 'Teodoro A. Agoncillo', 'Gregorio H. Del Pilar',
+            'Teresa M. Magbanua', 'Emilio F. Aguinaldo'
+          ]);
+          const records = await db.assessments.toArray();
+          const mockIds = records.filter(r => mockNames.has(r.owner?.name)).map(r => r.id);
+          if (mockIds.length > 0) {
+            await db.assessments.bulkDelete(mockIds);
           }
-          const actualTotalArea = Math.round(baseAreaPerFloor * numFloors * 100) / 100;
-
-          const mv = 8000 + (i * 500);
-          const pct = 100;
-          const coreCost = actualTotalArea * mv * (pct / 100);
-          const hasPorch = (i % 2 === 0);
-          const addCost = hasPorch ? (12 * mv * 0.3) : 0;
-          const totalCost = coreCost + addCost;
-          const bType = i % 2 === 0 ? 'Residential' : 'Commercial';
-          const standardAssessRate = getStandardAssessmentLevel(bType, totalCost);
-          const assessed = roundNearest10(totalCost * (standardAssessRate / 100));
-
-          sampleRecords.push({
-            createdAt: baseTime + (i * 3600 * 1000 * 3),
-            updatedAt: baseTime + (i * 3600 * 1000 * 3),
-            synced: 1,
-            owner: {
-              name: mockOwners[i],
-              lotBlockNumber: `Lot ${i + 1} Blk ${((i % 5) + 1)}`,
-              mailingAddress: `Block ${((i % 4) + 1)}, Mabini St.`,
-              contactNumber: `0917-555-01${i < 10 ? '0' + i : i}`
-            },
-            valuation: {
-              buildingType: bType,
-              numberOfFloors: numFloors,
-              floorAreas: floorAreas,
-              buildingArea: actualTotalArea,
-              marketValuePerSqm: mv,
-              percentCompleted: pct,
-              assessmentLevel: standardAssessRate
-            },
-            additionalItems: hasPorch ? [
-              { type: 'Porch', area: 12, rate: 0.30, calculatedCost: addCost }
-            ] : [],
-            calculations: {
-              coreBuildingCost: coreCost,
-              additionalItemsCost: addCost,
-              totalBuildingCost: totalCost,
-              assessedValue: assessed
-            }
-          });
+        } catch (e) {
+          console.warn('Could not clean legacy mock records:', e);
         }
-
-        await db.assessments.bulkAdd(sampleRecords);
-        showToast('Loaded sample FAAS records');
       }
 
       /* ------------------------------------------------------------------------
@@ -2054,7 +2002,7 @@
         renderFloorInputs(1, ['']);
         setupListeners();
         try {
-          await seedInitialDataIfEmpty();
+          await clearLegacyMockData();
           await refreshDashboard();
         } catch (err) {
           console.error('Initialization error:', err);
