@@ -1,0 +1,1843 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>FAAS Building Appraisal - Mobile Prototype</title>
+  <!-- Dexie.js for lightweight, asynchronous IndexedDB storage -->
+  <script src="https://unpkg.com/dexie@latest/dist/dexie.js"></script>
+
+  <style>
+    /* ==========================================================================
+       CSS VARIABLES & THEME TOKENS (HIGH-CONTRAST, LOW-RAM WEBVIEW OPTIMIZED)
+       ========================================================================== */
+    :root {
+      --primary: #005a9e;
+      --primary-dark: #003e6e;
+      --primary-light: #e6f0fa;
+      --accent: #d83b01;
+      --accent-hover: #b12d00;
+      --success: #107c10;
+      --success-light: #eaf6ea;
+      --warning: #ffaa44;
+      --warning-light: #fff5e6;
+      --bg-page: #f3f5f8;
+      --bg-surface: #ffffff;
+      --text-main: #1a1f26;
+      --text-muted: #596573;
+      --border-subtle: #d2d8e0;
+      --border-focus: #005a9e;
+      --radius-sm: 6px;
+      --radius-md: 10px;
+      --radius-lg: 14px;
+      --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.08);
+      --shadow-md: 0 3px 8px rgba(0, 0, 0, 0.12);
+      --shadow-float: 0 6px 16px rgba(0, 0, 0, 0.18);
+      --font-stack: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    body {
+      font-family: var(--font-stack);
+      background-color: var(--bg-page);
+      color: var(--text-main);
+      line-height: 1.45;
+      font-size: 15px;
+      padding-bottom: 90px;
+      /* Space for FAB */
+      overflow-x: hidden;
+    }
+
+    /* Hardware acceleration & smooth performance on low-end chipsets */
+    .view-container,
+    .fab-btn,
+    .summary-bar {
+      transform: translateZ(0);
+      will-change: transform;
+    }
+
+    /* Core Visibility Utility */
+    .hidden {
+      display: none !important;
+    }
+
+    /* ==========================================================================
+       CONTAINERS & LAYOUT
+       ========================================================================== */
+    .view-container {
+      max-width: 680px;
+      margin: 0 auto;
+      padding: 14px 12px;
+    }
+
+    .card {
+      background: var(--bg-surface);
+      border-radius: var(--radius-md);
+      border: 1px solid var(--border-subtle);
+      box-shadow: var(--shadow-sm);
+      margin-bottom: 14px;
+      padding: 14px;
+    }
+
+    .card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--border-subtle);
+      padding-bottom: 8px;
+      margin-bottom: 12px;
+    }
+
+    .card-title {
+      font-size: 0.95rem;
+      font-weight: 700;
+      color: var(--primary-dark);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    /* ==========================================================================
+       DASHBOARD LIST VIEW
+       ========================================================================== */
+    .dashboard-stats {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+
+    .stat-pill {
+      flex: 1;
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-sm);
+      padding: 8px 10px;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .stat-label {
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      font-weight: 600;
+    }
+
+    .stat-val {
+      font-size: 1.15rem;
+      font-weight: 700;
+      color: var(--primary);
+    }
+
+    /* Filter Controls (Search & Sort) */
+    .filter-controls {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+
+    .filter-controls .search-box {
+      flex: 1;
+    }
+
+    .filter-controls .sort-box {
+      width: 175px;
+    }
+
+    @media (max-width: 480px) {
+      .filter-controls {
+        flex-direction: column;
+      }
+
+      .filter-controls .sort-box {
+        width: 100%;
+      }
+    }
+
+    .records-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .record-item {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      border-left: 4px solid var(--primary);
+      border-radius: var(--radius-sm);
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      cursor: pointer;
+      position: relative;
+      touch-action: manipulation;
+    }
+
+    .record-item:active {
+      background-color: var(--primary-light);
+    }
+
+    .record-row-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .record-owner {
+      font-size: 0.95rem;
+      font-weight: 700;
+      color: var(--text-main);
+      word-break: break-word;
+    }
+
+    .badge-btype {
+      font-size: 0.72rem;
+      padding: 3px 8px;
+      border-radius: var(--radius-sm);
+      font-weight: 600;
+      background: #edf2f7;
+      color: var(--primary-dark);
+      border: 1px solid var(--border-subtle);
+      white-space: nowrap;
+    }
+
+    .floor-areas-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+      gap: 8px;
+      background: #f8fafc;
+      padding: 10px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border-subtle);
+      margin-bottom: 10px;
+    }
+
+    .floor-area-cell {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+
+    .floor-area-cell label {
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: var(--text-muted);
+    }
+
+    .record-row-mid {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 6px;
+      font-size: 0.82rem;
+      color: var(--text-muted);
+    }
+
+    .record-row-bottom {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      margin-top: 4px;
+      border-top: 1px dashed #e8ecf0;
+      padding-top: 5px;
+    }
+
+    .record-value {
+      font-weight: 700;
+      color: var(--primary-dark);
+      font-size: 0.85rem;
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 36px 16px;
+      background: var(--bg-surface);
+      border: 1px dashed var(--border-subtle);
+      border-radius: var(--radius-md);
+      color: var(--text-muted);
+    }
+
+    /* ==========================================================================
+       PAGINATION CONTROLS
+       ========================================================================== */
+    .pagination-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-md);
+      padding: 10px 14px;
+      margin-top: 12px;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .page-info {
+      font-size: 0.82rem;
+      color: var(--text-muted);
+      font-weight: 600;
+    }
+
+    .pagination-btn {
+      background: var(--primary-light);
+      color: var(--primary-dark);
+      border: 1px solid var(--primary);
+      padding: 7px 16px;
+      border-radius: var(--radius-sm);
+      font-size: 0.85rem;
+      font-weight: 700;
+      cursor: pointer;
+      min-height: 40px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      touch-action: manipulation;
+    }
+
+    .pagination-btn:disabled {
+      background: #eaedf1;
+      color: #9ba6b2;
+      border-color: #d2d8e0;
+      cursor: not-allowed;
+      opacity: 0.7;
+    }
+
+    /* ==========================================================================
+       FORM CONTROLS & INPUT GROUPS
+       ========================================================================== */
+    .form-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 10px;
+    }
+
+    @media (min-width: 480px) {
+      .form-grid-2 {
+        grid-template-columns: 1fr 1fr;
+      }
+    }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .form-label {
+      font-size: 0.78rem;
+      font-weight: 700;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.2px;
+    }
+
+    .form-label .req {
+      color: var(--accent);
+      margin-left: 2px;
+    }
+
+    .form-control {
+      width: 100%;
+      height: 44px;
+      /* Touch target minimum */
+      padding: 8px 12px;
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-sm);
+      background-color: #ffffff;
+      color: var(--text-main);
+      font-size: 0.95rem;
+      font-family: inherit;
+      outline: none;
+      -webkit-appearance: none;
+    }
+
+    .form-control:focus {
+      border-color: var(--border-focus);
+      box-shadow: 0 0 0 2px rgba(0, 90, 158, 0.2);
+    }
+
+    .form-control[readonly] {
+      background-color: #f7f9fa;
+      color: #333d47;
+      font-weight: 600;
+    }
+
+    .helper-text {
+      font-size: 0.7rem;
+      color: var(--text-muted);
+    }
+
+    /* ==========================================================================
+       DYNAMIC ADDITIONAL ITEMS
+       ========================================================================== */
+    .dynamic-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+
+    .dynamic-item-card {
+      background: #fafbfc;
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-sm);
+      padding: 10px 12px;
+      position: relative;
+    }
+
+    .dynamic-item-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+
+    .dynamic-item-title {
+      font-weight: 700;
+      font-size: 0.88rem;
+      color: var(--primary-dark);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .btn-remove-item {
+      background: none;
+      border: none;
+      color: var(--accent);
+      font-weight: 700;
+      font-size: 0.8rem;
+      padding: 4px 8px;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+
+    .btn-remove-item:active {
+      background-color: #fde7e7;
+    }
+
+    /* Segmented Radio / Rate Switcher */
+    .rate-switch-group {
+      display: flex;
+      border: 1px solid var(--primary);
+      border-radius: var(--radius-sm);
+      overflow: hidden;
+      height: 38px;
+      margin-top: 2px;
+    }
+
+    .rate-switch-group label {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #ffffff;
+      color: var(--primary);
+      font-size: 0.82rem;
+      font-weight: 700;
+      cursor: pointer;
+      text-align: center;
+      user-select: none;
+    }
+
+    .rate-switch-group input[type="radio"] {
+      display: none;
+    }
+
+    .rate-switch-group input[type="radio"]:checked+span {
+      background: var(--primary);
+      color: #ffffff;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .rate-switch-group span {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .item-subtotal-badge {
+      font-size: 0.82rem;
+      font-weight: 700;
+      color: var(--primary-dark);
+      background: var(--primary-light);
+      padding: 4px 8px;
+      border-radius: var(--radius-sm);
+      margin-top: 8px;
+      text-align: right;
+    }
+
+    .add-item-controls {
+      display: flex;
+      gap: 8px;
+      margin-top: 8px;
+    }
+
+    .btn-secondary {
+      background: #ffffff;
+      border: 1px solid var(--primary);
+      color: var(--primary);
+      padding: 8px 14px;
+      border-radius: var(--radius-sm);
+      font-weight: 700;
+      font-size: 0.85rem;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 42px;
+      touch-action: manipulation;
+    }
+
+    .btn-secondary:active {
+      background-color: var(--primary-light);
+    }
+
+    /* ==========================================================================
+       LIVE CALCULATION SUMMARY CARD
+       ========================================================================== */
+    .summary-card {
+      background: #0e273c;
+      color: #ffffff;
+      border-radius: var(--radius-md);
+      padding: 16px;
+      margin-bottom: 16px;
+      box-shadow: var(--shadow-md);
+    }
+
+    .summary-title {
+      font-size: 0.85rem;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: #a4c9eb;
+      font-weight: 700;
+      margin-bottom: 10px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .summary-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 6px 0;
+      font-size: 0.85rem;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .summary-row.highlight {
+      border-bottom: none;
+      padding-top: 10px;
+      margin-top: 6px;
+      border-top: 1px solid rgba(255, 255, 255, 0.25);
+    }
+
+    .summary-value {
+      font-family: monospace, sans-serif;
+      font-size: 0.95rem;
+      font-weight: 700;
+    }
+
+    .summary-value.grand-total {
+      font-size: 1.25rem;
+      color: #4cd964;
+    }
+
+    .summary-value.assessment-total {
+      font-size: 1.35rem;
+      color: #ffcc00;
+    }
+
+    /* ==========================================================================
+       ACTION BUTTONS & TOOLBAR
+       ========================================================================== */
+    .form-actions-toolbar {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-top: 16px;
+    }
+
+    .btn-primary {
+      background: var(--primary);
+      color: #ffffff;
+      border: none;
+      height: 48px;
+      border-radius: var(--radius-md);
+      font-size: 1rem;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      box-shadow: var(--shadow-sm);
+      touch-action: manipulation;
+    }
+
+    .btn-primary:active {
+      background: var(--primary-dark);
+    }
+
+    .btn-danger {
+      background: #ffffff;
+      color: var(--accent);
+      border: 1px solid var(--accent);
+      height: 44px;
+      border-radius: var(--radius-md);
+      font-size: 0.9rem;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      touch-action: manipulation;
+    }
+
+    .btn-danger:active {
+      background: #ffebe6;
+    }
+
+    .btn-ghost {
+      background: transparent;
+      color: var(--text-muted);
+      border: 1px solid var(--border-subtle);
+      height: 44px;
+      border-radius: var(--radius-md);
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      touch-action: manipulation;
+    }
+
+    .btn-ghost:active {
+      background: #eef1f5;
+    }
+
+    /* Fixed Floating Action Button (FAB) */
+    .fab-btn {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      background: var(--accent);
+      color: #ffffff;
+      border: none;
+      border-radius: 30px;
+      padding: 14px 22px;
+      font-size: 0.95rem;
+      font-weight: 800;
+      letter-spacing: 0.3px;
+      box-shadow: var(--shadow-float);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      z-index: 99;
+      touch-action: manipulation;
+    }
+
+    .fab-btn:active {
+      background: var(--accent-hover);
+      transform: scale(0.97);
+    }
+
+    /* ==========================================================================
+       TOAST / NOTIFICATIONS
+       ========================================================================== */
+    #toast {
+      position: fixed;
+      bottom: 80px;
+      left: 50%;
+      transform: translateX(-50%) translateY(50px);
+      background: #1e293b;
+      color: #ffffff;
+      padding: 10px 18px;
+      border-radius: 20px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      box-shadow: var(--shadow-float);
+      z-index: 1000;
+      opacity: 0;
+      pointer-events: none;
+      transition: all 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    }
+
+    #toast.show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+
+    /* Form Mode Indicator */
+    .mode-indicator {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      padding: 3px 8px;
+      border-radius: 4px;
+      background: #e0f2fe;
+      color: #0369a1;
+      margin-bottom: 8px;
+    }
+
+    .mode-indicator.editing {
+      background: #fef3c7;
+      color: #92400e;
+    }
+  </style>
+</head>
+
+<body>
+
+  <!-- ==========================================================================
+       MAIN LIST VIEW (DASHBOARD)
+       ========================================================================== -->
+  <main id="view-list" class="view-container">
+    <!-- Top Summary Pills -->
+    <div class="dashboard-stats">
+      <div class="stat-pill">
+        <span class="stat-label">Total Records</span>
+        <span class="stat-val" id="stat-total-records">0</span>
+      </div>
+    </div>
+
+    <!-- Search & Sort Controls -->
+    <div class="filter-controls">
+      <div class="search-box">
+        <input type="search" id="input-search-records" class="form-control"
+          placeholder="🔍 Search owner, lot & block, type..." />
+      </div>
+      <div class="sort-box">
+        <select id="select-sort-order" class="form-control">
+          <option value="latest" selected>Latest to Oldest</option>
+          <option value="oldest">Oldest to Latest</option>
+          <option value="name-asc">Owner (A to Z)</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Record Items Container -->
+    <section class="card" style="padding: 12px 10px;">
+      <div class="card-header" style="margin-bottom: 8px;">
+        <span class="card-title">📋 Appraisal Master List</span>
+        <span style="font-size: 0.75rem; color: var(--text-muted);">10 items / page</span>
+      </div>
+
+      <div id="records-list-container" class="records-list">
+        <!-- Rendered via JavaScript -->
+      </div>
+
+      <!-- Pagination Footer -->
+      <nav class="pagination-bar" aria-label="Records pagination">
+        <button id="btn-prev-page" class="pagination-btn" type="button" disabled>◀ Previous</button>
+        <span id="page-display-info" class="page-info">Page 1 of 1</span>
+        <button id="btn-next-page" class="pagination-btn" type="button" disabled>Next ▶</button>
+      </nav>
+    </section>
+  </main>
+
+  <!-- Fixed Action Button (+ CREATE NEW FAAS) -->
+  <button id="fab-create-faas" class="fab-btn" type="button">
+    <span>➕</span>
+    <span>CREATE NEW FAAS</span>
+  </button>
+
+  <!-- ==========================================================================
+       FORM VIEW (CREATE / EDIT FAAS RECORD)
+       ========================================================================== -->
+  <section id="view-form" class="view-container hidden">
+    <!-- Top Mode Indicator & Navigation -->
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+      <div id="form-mode-badge" class="mode-indicator">
+        <span>●</span> <span id="form-mode-text">New Record Mode</span>
+      </div>
+      <button id="btn-cancel-top" class="btn-ghost" style="height: 32px; padding: 0 10px; font-size: 0.78rem;"
+        type="button">
+        ✕ Back to List
+      </button>
+    </div>
+
+    <form id="faas-form" autocomplete="off" onsubmit="return false;">
+      <input type="hidden" id="record-id" value="" />
+
+      <!-- SECTION 1: OWNER DETAILS -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">👤 1. Owner Details</span>
+        </div>
+        <div class="form-grid">
+          <div class="form-group">
+            <label class="form-label" for="ownerName">Owner Name <span class="req">*</span></label>
+            <input type="text" id="ownerName" class="form-control" placeholder="e.g., Juan Dela Cruz" required />
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="lotBlockNumber">Lot &amp; Block Number</label>
+            <input type="text" id="lotBlockNumber" class="form-control" placeholder="e.g., Lot 5 Blk 2" />
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="mailingAddress">Mailing Address</label>
+            <input type="text" id="mailingAddress" class="form-control"
+              placeholder="e.g., Block 12 Lot 4, Mabini St." />
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="contactNumber">Contact Number</label>
+            <input type="tel" id="contactNumber" class="form-control" placeholder="e.g., 0917-123-4567" />
+          </div>
+        </div>
+      </div>
+
+      <!-- SECTION 2: CORE BUILDING VALUATION -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">🏗️ 2. Core Building Valuation</span>
+        </div>
+        <div class="form-grid">
+          <div class="form-grid form-grid-2" style="grid-column: 1 / -1; margin-bottom: 0;">
+            <div class="form-group">
+              <label class="form-label" for="buildingType">Building Type <span class="req">*</span></label>
+              <select id="buildingType" class="form-control">
+                <option value="Residential" selected>Residential</option>
+                <option value="Commercial">Commercial</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="numberOfFloors">Number of Floors <span class="req">*</span></label>
+              <input type="number" id="numberOfFloors" class="form-control" min="1" max="50" step="1" value="1"
+                placeholder="1" required />
+            </div>
+          </div>
+
+          <div class="form-group" style="grid-column: 1 / -1; margin-bottom: 0;">
+            <label class="form-label" style="margin-bottom: 4px;">Separate Area Per Floor (sqm) <span
+                class="req">*</span></label>
+            <div id="floor-areas-container" class="floor-areas-grid">
+              <!-- Dynamically populated per floor -->
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="buildingArea">Total Building Floor Area (sqm)</label>
+            <input type="number" id="buildingArea" class="form-control" readonly placeholder="0.00"
+              style="background: #eef3f8; font-weight: 700; color: var(--primary-dark);" />
+            <span class="helper-text">Auto-summed from floor areas above</span>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="marketValuePerSqm">Market Value per sqm (₱) <span
+                class="req">*</span></label>
+            <input type="number" id="marketValuePerSqm" class="form-control calc-trigger" min="0" step="10"
+              placeholder="0.00" required />
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="percentCompleted">% Construction Completed <span class="req">*</span></label>
+            <input type="number" id="percentCompleted" class="form-control calc-trigger" min="0" max="100" step="1"
+              value="100" placeholder="100" required />
+            <span class="helper-text">Standard appraisal completion rating (0 - 100%)</span>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Core Building Cost Subtotal</label>
+            <input type="text" id="disp-core-building-cost" class="form-control" readonly value="₱ 0" />
+          </div>
+        </div>
+      </div>
+
+      <!-- SECTION 3: DYNAMIC ADDITIONAL ITEMS -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">➕ 3. Additional Items &amp; Appurtenances</span>
+        </div>
+        <p class="helper-text" style="margin-bottom: 10px;">
+          Porch, Terrace, Balcony &amp; Car Port compute at 30% or 40% of Core Base Market Value. Tiles compute at
+          ₱100/piece.
+        </p>
+
+        <!-- Container for dynamically added sub-items -->
+        <div id="additional-items-container" class="dynamic-list">
+          <!-- Dynamically injected item cards -->
+        </div>
+
+        <!-- Add Item Selector -->
+        <div class="add-item-controls">
+          <select id="select-item-type" class="form-control" style="flex: 2;">
+            <option value="Porch">Porch (Area x Base MV x Rate)</option>
+            <option value="Terrace">Terrace (Area x Base MV x Rate)</option>
+            <option value="Balcony">Balcony (Area x Base MV x Rate)</option>
+            <option value="Car Port">Car Port (Area x Base MV x Rate)</option>
+            <option value="Tiles">Tiles (Pieces x ₱100)</option>
+          </select>
+          <button id="btn-add-item" type="button" class="btn-secondary" style="flex: 1;">
+            + Add Sub-Item
+          </button>
+        </div>
+      </div>
+
+      <!-- SECTION 4: ASSESSMENT LEVEL & TOTALS -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">📊 4. Assessment Level</span>
+          <button type="button" id="btn-reapply-schedule" class="btn-ghost"
+            style="font-size: 0.72rem; padding: 2px 8px;" title="Reset to standard schedule rate">
+            ↺ Auto-fill from Schedule
+          </button>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="assessmentLevel">Assessment Level (%) <span class="req">*</span></label>
+          <input type="number" id="assessmentLevel" class="form-control" min="0" max="100" step="0.5" value="0"
+            placeholder="e.g., 15" required />
+          <span class="helper-text" id="assessment-guide-note">
+            Auto-determined by Total Building Cost schedule. You may edit this value directly.
+          </span>
+        </div>
+      </div>
+
+      <!-- LIVE CALCULATION SUMMARY DASHBOARD CARD -->
+      <div class="summary-card">
+        <div class="summary-title">
+          <span>Formula Engine Calculations</span>
+          <span style="font-size: 0.7rem; color: #a4c9eb;">Live • Rounded to 10s</span>
+        </div>
+        <div class="summary-row">
+          <span>Core Building Cost:</span>
+          <span class="summary-value" id="summary-core-cost">₱ 0</span>
+        </div>
+        <div class="summary-row">
+          <span>Additional Items Cost:</span>
+          <span class="summary-value" id="summary-additional-cost">₱ 0</span>
+        </div>
+        <div class="summary-row highlight">
+          <span style="font-weight: 700; color: #ffffff;">Total Building Cost:</span>
+          <span class="summary-value grand-total" id="summary-total-cost">₱ 0</span>
+        </div>
+        <div class="summary-row highlight">
+          <span style="font-weight: 700; color: #ffcc00;">Assessed Value:</span>
+          <span class="summary-value assessment-total" id="summary-assessed-value">₱ 0</span>
+        </div>
+      </div>
+
+      <!-- FORM ACTIONS -->
+      <div class="form-actions-toolbar">
+        <button id="btn-save-record" type="button" class="btn-primary">
+          💾 Save FAAS Assessment Record
+        </button>
+        <button id="btn-delete-record" type="button" class="btn-danger hidden">
+          🗑️ Delete Record
+        </button>
+        <button id="btn-cancel-form" type="button" class="btn-ghost">
+          Cancel &amp; Return to Dashboard
+        </button>
+      </div>
+    </form>
+  </section>
+
+  <!-- Notification Toast -->
+  <div id="toast" role="alert" aria-live="polite">Notification message</div>
+
+  <!-- ==========================================================================
+       JAVASCRIPT: CONTROLLER, STORAGE & CALCULATION ENGINE
+       ========================================================================== -->
+  <script>
+    (function () {
+      'use strict';
+
+      /* ------------------------------------------------------------------------
+         1. DATABASE INITIALIZATION (DEXIE.JS)
+         ------------------------------------------------------------------------ */
+      const db = new Dexie('FAAS_Building_Database');
+      // Flat document store indexed on id, createdAt, synced
+      db.version(1).stores({
+        assessments: '++id, createdAt, synced'
+      });
+
+      /* ------------------------------------------------------------------------
+         2. STATE MANAGEMENT
+         ------------------------------------------------------------------------ */
+      const state = {
+        currentPage: 1,
+        pageSize: 10,
+        totalRecords: 0,
+        totalPages: 1,
+        activeRecordId: null, // null for new record, int for edit mode
+        additionalItems: [],  // Array of dynamic items in active form
+        searchQuery: '',
+        sortOrder: 'latest',  // 'latest', 'oldest', 'name-asc'
+        isAssessmentLevelManual: false
+      };
+
+      /* ------------------------------------------------------------------------
+         3. DOM SELECTORS
+         ------------------------------------------------------------------------ */
+      const dom = {
+        viewList: document.getElementById('view-list'),
+        viewForm: document.getElementById('view-form'),
+        fabCreate: document.getElementById('fab-create-faas'),
+        recordsContainer: document.getElementById('records-list-container'),
+        btnPrev: document.getElementById('btn-prev-page'),
+        btnNext: document.getElementById('btn-next-page'),
+        pageInfo: document.getElementById('page-display-info'),
+        statTotal: document.getElementById('stat-total-records'),
+        inputSearch: document.getElementById('input-search-records'),
+        selectSort: document.getElementById('select-sort-order'),
+        toast: document.getElementById('toast'),
+
+        // Form elements
+        form: document.getElementById('faas-form'),
+        recordId: document.getElementById('record-id'),
+        formModeBadge: document.getElementById('form-mode-badge'),
+        formModeText: document.getElementById('form-mode-text'),
+        ownerName: document.getElementById('ownerName'),
+        lotBlockNumber: document.getElementById('lotBlockNumber'),
+        mailingAddress: document.getElementById('mailingAddress'),
+        contactNumber: document.getElementById('contactNumber'),
+        buildingType: document.getElementById('buildingType'),
+        numberOfFloors: document.getElementById('numberOfFloors'),
+        floorAreasContainer: document.getElementById('floor-areas-container'),
+        buildingArea: document.getElementById('buildingArea'),
+        marketValuePerSqm: document.getElementById('marketValuePerSqm'),
+        percentCompleted: document.getElementById('percentCompleted'),
+        assessmentLevel: document.getElementById('assessmentLevel'),
+        assessmentGuideNote: document.getElementById('assessment-guide-note'),
+        btnReapplySchedule: document.getElementById('btn-reapply-schedule'),
+
+        // Dynamic items
+        additionalContainer: document.getElementById('additional-items-container'),
+        selectItemType: document.getElementById('select-item-type'),
+        btnAddItem: document.getElementById('btn-add-item'),
+
+        // Calculation outputs
+        dispCoreCost: document.getElementById('disp-core-building-cost'),
+        summaryCoreCost: document.getElementById('summary-core-cost'),
+        summaryAddCost: document.getElementById('summary-additional-cost'),
+        summaryTotalCost: document.getElementById('summary-total-cost'),
+        summaryAssessedValue: document.getElementById('summary-assessed-value'),
+
+        // Action buttons
+        btnSave: document.getElementById('btn-save-record'),
+        btnDelete: document.getElementById('btn-delete-record'),
+        btnCancel: document.getElementById('btn-cancel-form'),
+        btnCancelTop: document.getElementById('btn-cancel-top')
+      };
+
+      /* ------------------------------------------------------------------------
+         4. UTILITY FUNCTIONS
+         ------------------------------------------------------------------------ */
+      function roundNearest10(val) {
+        if (!val || isNaN(val)) return 0;
+        return Math.round(val / 10) * 10;
+      }
+
+      function formatCurrency(val) {
+        const rounded = roundNearest10(val);
+        return '₱ ' + rounded.toLocaleString('en-PH');
+      }
+
+      function showToast(message, duration = 2400) {
+        dom.toast.textContent = message;
+        dom.toast.classList.add('show');
+        setTimeout(() => {
+          dom.toast.classList.remove('show');
+        }, duration);
+      }
+
+      function formatDate(timestamp) {
+        if (!timestamp) return 'N/A';
+        const d = new Date(timestamp);
+        return d.toLocaleDateString('en-PH', {
+          year: 'numeric',
+          month: 'short',
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit'
+        });
+      }
+
+      /* ------------------------------------------------------------------------
+         5. VIEW SWITCHING (FAST CSS UTILITY TRANSITIONS)
+         ------------------------------------------------------------------------ */
+      function showListView() {
+        dom.viewForm.classList.add('hidden');
+        dom.viewList.classList.remove('hidden');
+        dom.fabCreate.classList.remove('hidden');
+        window.scrollTo(0, 0);
+        refreshDashboard();
+      }
+
+      function showFormView(isEdit = false) {
+        dom.viewList.classList.add('hidden');
+        dom.fabCreate.classList.add('hidden');
+        dom.viewForm.classList.remove('hidden');
+        window.scrollTo(0, 0);
+
+        if (isEdit) {
+          dom.formModeBadge.classList.add('editing');
+          dom.formModeText.textContent = `Editing FAAS Record #${state.activeRecordId}`;
+          dom.btnDelete.classList.remove('hidden');
+        } else {
+          dom.formModeBadge.classList.remove('editing');
+          dom.formModeText.textContent = 'New Record Mode';
+          dom.btnDelete.classList.add('hidden');
+        }
+      }
+
+      function getStandardAssessmentLevel(buildingType, totalCost) {
+        if (buildingType === 'Commercial') {
+          if (totalCost <= 300000) return 20;
+          if (totalCost <= 500000) return 25;
+          if (totalCost <= 750000) return 30;
+          if (totalCost <= 1000000) return 35;
+          if (totalCost <= 2000000) return 40;
+          if (totalCost <= 5000000) return 45;
+          if (totalCost <= 10000000) return 50;
+          return 55;
+        } else {
+          // Residential
+          if (totalCost <= 175000) return 0;
+          if (totalCost <= 300000) return 5;
+          if (totalCost <= 500000) return 10;
+          if (totalCost <= 750000) return 15;
+          if (totalCost <= 1000000) return 20;
+          if (totalCost <= 2000000) return 25;
+          if (totalCost <= 5000000) return 30;
+          if (totalCost <= 10000000) return 35;
+          return 40;
+        }
+      }
+
+      /* ------------------------------------------------------------------------
+         6. MATHEMATICAL ENGINE & FORMULA LISTENER
+         ------------------------------------------------------------------------ */
+      function calculateValues() {
+        const area = parseFloat(dom.buildingArea.value) || 0;
+        const mvPerSqm = parseFloat(dom.marketValuePerSqm.value) || 0;
+        const pctComp = parseFloat(dom.percentCompleted.value) || 0;
+        const bType = dom.buildingType ? dom.buildingType.value : 'Residential';
+
+        // Core_Building_Cost = Building Area * Market Value per sqm * (Percent Construction Completed / 100)
+        const coreRaw = area * mvPerSqm * (pctComp / 100);
+        const coreRounded = roundNearest10(coreRaw);
+
+        // Additional Items Calculation
+        let addCostSum = 0;
+        state.additionalItems.forEach((item, index) => {
+          let itemCost = 0;
+          if (item.type === 'Tiles') {
+            // Formula = Pieces * 100
+            const pieces = parseFloat(item.quantity) || 0;
+            itemCost = pieces * 400;
+          } else {
+            // Porch, Terrace, Balcony, Car Port
+            // Formula = Item Area * (Core Building's Market Value per sqm) * (0.30 or 0.40)
+            const itemArea = parseFloat(item.area) || 0;
+            const rate = parseFloat(item.rate) || 0.30;
+            itemCost = itemArea * mvPerSqm * rate;
+          }
+          item.calculatedCost = itemCost;
+          addCostSum += itemCost;
+
+          // Update individual item subtotal display if present in DOM
+          const subtotalElem = document.getElementById(`item-subtotal-${index}`);
+          if (subtotalElem) {
+            subtotalElem.textContent = formatCurrency(itemCost);
+          }
+        });
+
+        const addItemsRounded = roundNearest10(addCostSum);
+
+        // Total Building Cost = Core_Building_Cost + Additional_Items_Cost (Round to nearest 10)
+        const totalBuildingCost = roundNearest10(coreRounded + addItemsRounded);
+
+        // Auto-determine Assessment Level from schedule if not manually customized
+        const standardRate = getStandardAssessmentLevel(bType, totalBuildingCost);
+        if (!state.isAssessmentLevelManual) {
+          dom.assessmentLevel.value = standardRate;
+        }
+
+        const assessPct = parseFloat(dom.assessmentLevel.value) || 0;
+
+        // Assessment Value = Total Building Cost * (Assessment Level Percentage / 100) (Round to nearest 10)
+        const assessedValue = roundNearest10(totalBuildingCost * (assessPct / 100));
+
+        // Update helper guide text
+        if (dom.assessmentGuideNote) {
+          if (state.isAssessmentLevelManual) {
+            dom.assessmentGuideNote.textContent = `Manual override: ${assessPct}% (Schedule for ${bType} at ${formatCurrency(totalBuildingCost)} is ${standardRate}%).`;
+          } else {
+            dom.assessmentGuideNote.textContent = `Auto-set from schedule: ${standardRate}% (${bType} building, Total Cost ${formatCurrency(totalBuildingCost)}). Editable anytime.`;
+          }
+        }
+
+        // Render to UI
+        dom.dispCoreCost.value = formatCurrency(coreRounded);
+        dom.summaryCoreCost.textContent = formatCurrency(coreRounded);
+        dom.summaryAddCost.textContent = formatCurrency(addItemsRounded);
+        dom.summaryTotalCost.textContent = formatCurrency(totalBuildingCost);
+        dom.summaryAssessedValue.textContent = formatCurrency(assessedValue);
+
+        return {
+          coreBuildingCost: coreRounded,
+          additionalItemsCost: addItemsRounded,
+          totalBuildingCost: totalBuildingCost,
+          assessmentLevel: assessPct,
+          assessedValue: assessedValue
+        };
+      }
+
+      /* ------------------------------------------------------------------------
+         7. DYNAMIC SUB-ITEMS RENDERING & MANAGEMENT
+         ------------------------------------------------------------------------ */
+      function renderAdditionalItems() {
+        dom.additionalContainer.innerHTML = '';
+
+        if (state.additionalItems.length === 0) {
+          dom.additionalContainer.innerHTML = `
+            <div style="text-align: center; padding: 12px; font-size: 0.8rem; color: var(--text-muted); background: #f9fbfd; border: 1px dashed var(--border-subtle); border-radius: var(--radius-sm);">
+              No additional appurtenances added yet. Use the dropdown below to append Porch, Terrace, Balcony, Car Port, or Tiles.
+            </div>
+          `;
+          calculateValues();
+          return;
+        }
+
+        state.additionalItems.forEach((item, index) => {
+          const itemCard = document.createElement('div');
+          itemCard.className = 'dynamic-item-card';
+
+          if (item.type === 'Tiles') {
+            itemCard.innerHTML = `
+              <div class="dynamic-item-header">
+                <span class="dynamic-item-title">🔲 ${item.type}</span>
+                <button type="button" class="btn-remove-item" data-index="${index}">✕ Remove</button>
+              </div>
+              <div class="form-grid">
+                <div class="form-group">
+                  <label class="form-label">Number of Pieces (Count)</label>
+                  <input type="number" min="0" step="1" class="form-control item-pieces-input" data-index="${index}" value="${item.quantity || ''}" placeholder="e.g., 250" />
+                  <span class="helper-text">Standard Rate: ₱100.00 per piece</span>
+                </div>
+              </div>
+              <div class="item-subtotal-badge">Subtotal: <span id="item-subtotal-${index}">${formatCurrency(item.calculatedCost || 0)}</span></div>
+            `;
+          } else {
+            // Porch, Terrace, Balcony, Car Port
+            const is30 = (item.rate === 0.30 || !item.rate);
+            const is40 = (item.rate === 0.40);
+            itemCard.innerHTML = `
+              <div class="dynamic-item-header">
+                <span class="dynamic-item-title">🏡 ${item.type}</span>
+                <button type="button" class="btn-remove-item" data-index="${index}">✕ Remove</button>
+              </div>
+              <div class="form-grid form-grid-2">
+                <div class="form-group">
+                  <label class="form-label">Area (sqm)</label>
+                  <input type="number" min="0" step="0.01" class="form-control item-area-input" data-index="${index}" value="${item.area || ''}" placeholder="0.00" />
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Rate Factor</label>
+                  <div class="rate-switch-group">
+                    <label>
+                      <input type="radio" name="rate-${index}" class="item-rate-radio" data-index="${index}" value="0.30" ${is30 ? 'checked' : ''} />
+                      <span>30%</span>
+                    </label>
+                    <label>
+                      <input type="radio" name="rate-${index}" class="item-rate-radio" data-index="${index}" value="0.40" ${is40 ? 'checked' : ''} />
+                      <span>40%</span>
+                    </label>
+                  </div>
+                </div>
+              </div>
+              <div class="item-subtotal-badge">Subtotal: <span id="item-subtotal-${index}">${formatCurrency(item.calculatedCost || 0)}</span></div>
+            `;
+          }
+
+          dom.additionalContainer.appendChild(itemCard);
+        });
+
+        // Attach listeners for newly created elements
+        dom.additionalContainer.querySelectorAll('.btn-remove-item').forEach(btn => {
+          btn.addEventListener('click', (e) => {
+            const idx = parseInt(e.currentTarget.getAttribute('data-index'), 10);
+            state.additionalItems.splice(idx, 1);
+            renderAdditionalItems();
+          });
+        });
+
+        dom.additionalContainer.querySelectorAll('.item-pieces-input').forEach(input => {
+          input.addEventListener('input', (e) => {
+            const idx = parseInt(e.target.getAttribute('data-index'), 10);
+            state.additionalItems[idx].quantity = parseFloat(e.target.value) || 0;
+            calculateValues();
+          });
+        });
+
+        dom.additionalContainer.querySelectorAll('.item-area-input').forEach(input => {
+          input.addEventListener('input', (e) => {
+            const idx = parseInt(e.target.getAttribute('data-index'), 10);
+            state.additionalItems[idx].area = parseFloat(e.target.value) || 0;
+            calculateValues();
+          });
+        });
+
+        dom.additionalContainer.querySelectorAll('.item-rate-radio').forEach(radio => {
+          radio.addEventListener('change', (e) => {
+            const idx = parseInt(e.target.getAttribute('data-index'), 10);
+            state.additionalItems[idx].rate = parseFloat(e.target.value) || 0.30;
+            calculateValues();
+          });
+        });
+
+        calculateValues();
+      }
+
+      function addSubItem() {
+        const type = dom.selectItemType.value;
+        if (type === 'Tiles') {
+          state.additionalItems.push({
+            type: 'Tiles',
+            quantity: 0,
+            calculatedCost: 0
+          });
+        } else {
+          state.additionalItems.push({
+            type: type,
+            area: 0,
+            rate: 0.30,
+            calculatedCost: 0
+          });
+        }
+        renderAdditionalItems();
+      }
+
+      /* ------------------------------------------------------------------------
+         7.5 FLOOR AREA HELPERS (SEPARATE AREA PER FLOOR)
+         ------------------------------------------------------------------------ */
+      function renderFloorInputs(count, values = []) {
+        count = Math.max(1, parseInt(count, 10) || 1);
+        dom.floorAreasContainer.innerHTML = '';
+
+        for (let i = 1; i <= count; i++) {
+          const cell = document.createElement('div');
+          cell.className = 'floor-area-cell';
+
+          const label = document.createElement('label');
+          label.textContent = `Floor ${i} Area (sqm)`;
+
+          const input = document.createElement('input');
+          input.type = 'number';
+          input.className = 'form-control floor-area-input';
+          input.min = '0';
+          input.step = '0.01';
+          input.placeholder = '0.00';
+          input.dataset.floor = i;
+          input.value = values[i - 1] !== undefined ? values[i - 1] : '';
+
+          input.addEventListener('input', updateTotalFloorArea);
+
+          cell.appendChild(label);
+          cell.appendChild(input);
+          dom.floorAreasContainer.appendChild(cell);
+        }
+
+        updateTotalFloorArea();
+      }
+
+      function updateTotalFloorArea() {
+        const inputs = dom.floorAreasContainer.querySelectorAll('.floor-area-input');
+        let total = 0;
+        inputs.forEach(inp => {
+          const val = parseFloat(inp.value);
+          if (!isNaN(val) && val > 0) {
+            total += val;
+          }
+        });
+
+        total = Math.round(total * 100) / 100;
+        dom.buildingArea.value = total > 0 ? total : '';
+        calculateValues();
+      }
+
+      function onFloorsCountChange() {
+        const count = parseInt(dom.numberOfFloors.value, 10) || 1;
+        const existingInputs = dom.floorAreasContainer.querySelectorAll('.floor-area-input');
+        const values = Array.from(existingInputs).map(inp => inp.value);
+        renderFloorInputs(count, values);
+      }
+
+      /* ------------------------------------------------------------------------
+         8. DATABASE QUERIES & PAGINATION ENGINE WITH SEARCH & SORT
+         ------------------------------------------------------------------------ */
+      async function refreshDashboard() {
+        try {
+          let records = await db.assessments.toArray();
+
+          // Search query filter (Owner, Lot & Block, Address, Building Type)
+          const query = (state.searchQuery || '').trim().toLowerCase();
+          if (query) {
+            records = records.filter(rec => {
+              const name = (rec.owner?.name || '').toLowerCase();
+              const lotBlk = (rec.owner?.lotBlockNumber || '').toLowerCase();
+              const addr = (rec.owner?.mailingAddress || '').toLowerCase();
+              const bType = (rec.valuation?.buildingType || '').toLowerCase();
+              return name.includes(query) || lotBlk.includes(query) || addr.includes(query) || bType.includes(query);
+            });
+          }
+
+          // Sorting
+          if (state.sortOrder === 'oldest') {
+            records.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+          } else if (state.sortOrder === 'name-asc') {
+            records.sort((a, b) => (a.owner?.name || '').localeCompare(b.owner?.name || ''));
+          } else {
+            // Default: 'latest' (latest to oldest)
+            records.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+          }
+
+          state.totalRecords = records.length;
+          dom.statTotal.textContent = state.totalRecords;
+
+          state.totalPages = Math.max(1, Math.ceil(state.totalRecords / state.pageSize));
+          if (state.currentPage > state.totalPages) {
+            state.currentPage = state.totalPages;
+          }
+
+          const offset = (state.currentPage - 1) * state.pageSize;
+          const pageRecords = records.slice(offset, offset + state.pageSize);
+
+          renderRecordsList(pageRecords);
+          updatePaginationControls();
+        } catch (err) {
+          console.error('Failed to load dashboard:', err);
+          showToast('Storage error loading records');
+        }
+      }
+
+      function renderRecordsList(records) {
+        dom.recordsContainer.innerHTML = '';
+
+        if (!records || records.length === 0) {
+          dom.recordsContainer.innerHTML = `
+            <div class="empty-state">
+              <div style="font-size: 2rem; margin-bottom: 8px;">📑</div>
+              <strong style="color: var(--text-main);">No FAAS Records Found</strong>
+              <p style="font-size: 0.8rem; margin-top: 4px;">Tap "+ CREATE NEW FAAS" to start a new field appraisal.</p>
+            </div>
+          `;
+          return;
+        }
+
+        records.forEach(rec => {
+          const item = document.createElement('div');
+          item.className = 'record-item';
+          item.setAttribute('data-id', rec.id);
+
+          const formattedVal = formatCurrency(rec.calculations?.assessedValue || 0);
+          const lotBlock = rec.owner?.lotBlockNumber || rec.landReference?.lotBlockNumber || 'Not specified';
+          const address = rec.owner?.mailingAddress || '';
+          const bType = rec.valuation?.buildingType || 'Residential';
+          const bTypeIcon = bType === 'Commercial' ? '🏢' : '🏠';
+          const floors = rec.valuation?.numberOfFloors || 1;
+          const area = rec.valuation?.buildingArea || 0;
+
+          item.innerHTML = `
+            <div class="record-row-top">
+              <span class="record-owner">👤 ${escapeHtml(rec.owner?.name || 'Unnamed Owner')}</span>
+              <span class="badge-btype">${bTypeIcon} ${escapeHtml(bType)}</span>
+            </div>
+            <div class="record-row-mid">
+              <span>📍 Lot &amp; Blk: <strong>${escapeHtml(lotBlock)}</strong></span>
+              <span>• ${floors} Flr${floors > 1 ? 's' : ''} (${area} sqm)</span>
+              ${address ? `<span style="margin-left: 4px; color: var(--border-subtle);">|</span><span style="font-size: 0.75rem;">${escapeHtml(address)}</span>` : ''}
+            </div>
+            <div class="record-row-bottom">
+              <span>🕒 ${formatDate(rec.createdAt)}</span>
+              <span class="record-value">Assessed: ${formattedVal}</span>
+            </div>
+          `;
+
+          item.addEventListener('click', () => loadRecordForEdit(rec.id));
+          dom.recordsContainer.appendChild(item);
+        });
+      }
+
+      function updatePaginationControls() {
+        dom.pageInfo.textContent = `Page ${state.currentPage} of ${state.totalPages}`;
+        dom.btnPrev.disabled = state.currentPage <= 1;
+        dom.btnNext.disabled = state.currentPage >= state.totalPages;
+      }
+
+      function escapeHtml(str) {
+        if (!str) return '';
+        return String(str)
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&#039;');
+      }
+
+      /* ------------------------------------------------------------------------
+         9. FORM POPULATION & RESET (EDIT-READY STATE)
+         ------------------------------------------------------------------------ */
+      function resetForm() {
+        state.activeRecordId = null;
+        state.additionalItems = [];
+        state.isAssessmentLevelManual = false;
+
+        dom.form.reset();
+        dom.recordId.value = '';
+        dom.buildingType.value = 'Residential';
+        dom.numberOfFloors.value = '1';
+        renderFloorInputs(1, ['']);
+        dom.buildingArea.value = '';
+        dom.marketValuePerSqm.value = '';
+        dom.percentCompleted.value = '100';
+        dom.assessmentLevel.value = '0';
+
+        renderAdditionalItems();
+        calculateValues();
+      }
+
+      async function loadRecordForEdit(id) {
+        try {
+          const rec = await db.assessments.get(Number(id));
+          if (!rec) {
+            showToast('Record not found');
+            return;
+          }
+
+          state.activeRecordId = rec.id;
+          dom.recordId.value = rec.id;
+
+          // Populate Owner Details
+          dom.ownerName.value = rec.owner?.name || '';
+          dom.lotBlockNumber.value = rec.owner?.lotBlockNumber || rec.landReference?.lotBlockNumber || '';
+          dom.mailingAddress.value = rec.owner?.mailingAddress || '';
+          dom.contactNumber.value = rec.owner?.contactNumber || '';
+
+          // Populate Valuation metrics
+          dom.buildingType.value = rec.valuation?.buildingType || 'Residential';
+          const floors = rec.valuation?.numberOfFloors || 1;
+          dom.numberOfFloors.value = floors;
+          const floorAreas = Array.isArray(rec.valuation?.floorAreas) && rec.valuation.floorAreas.length > 0
+            ? rec.valuation.floorAreas
+            : [rec.valuation?.buildingArea || ''];
+          renderFloorInputs(floors, floorAreas);
+
+          dom.marketValuePerSqm.value = rec.valuation?.marketValuePerSqm || '';
+          dom.percentCompleted.value = rec.valuation?.percentCompleted ?? 100;
+          dom.assessmentLevel.value = rec.valuation?.assessmentLevel ?? 0;
+          state.isAssessmentLevelManual = true; // Preserve saved value on existing record
+
+          // Restore dynamic additional items
+          state.additionalItems = Array.isArray(rec.additionalItems) ? JSON.parse(JSON.stringify(rec.additionalItems)) : [];
+
+          renderAdditionalItems();
+          calculateValues();
+
+          // Switch view seamlessly
+          showFormView(true);
+        } catch (err) {
+          console.error('Error loading record:', err);
+          showToast('Could not load record');
+        }
+      }
+
+      /* ------------------------------------------------------------------------
+         10. SAVE & DELETE CRUD OPERATIONS
+         ------------------------------------------------------------------------ */
+      async function saveCurrentRecord() {
+        // Basic semantic validation
+        if (!dom.ownerName.value.trim()) {
+          showToast('Please enter Owner Name');
+          dom.ownerName.focus();
+          return;
+        }
+
+        const floorInputs = dom.floorAreasContainer.querySelectorAll('.floor-area-input');
+        const floorAreas = Array.from(floorInputs).map(inp => parseFloat(inp.value) || 0);
+        const totalFloorArea = parseFloat(dom.buildingArea.value) || 0;
+
+        if (totalFloorArea <= 0) {
+          showToast('Total floor area must be greater than 0');
+          const firstInp = dom.floorAreasContainer.querySelector('.floor-area-input');
+          if (firstInp) firstInp.focus();
+          return;
+        }
+        if (!dom.marketValuePerSqm.value || parseFloat(dom.marketValuePerSqm.value) <= 0) {
+          showToast('Market Value per sqm is required');
+          dom.marketValuePerSqm.focus();
+          return;
+        }
+
+        const calcs = calculateValues();
+        const now = Date.now();
+
+        // Single flat document payload layout
+        const recordPayload = {
+          createdAt: state.activeRecordId ? undefined : now, // Preserve original timestamp if editing
+          updatedAt: now,
+          synced: 0,
+
+          owner: {
+            name: dom.ownerName.value.trim(),
+            lotBlockNumber: dom.lotBlockNumber.value.trim(),
+            mailingAddress: dom.mailingAddress.value.trim(),
+            contactNumber: dom.contactNumber.value.trim()
+          },
+
+          valuation: {
+            buildingType: dom.buildingType.value,
+            numberOfFloors: parseInt(dom.numberOfFloors.value, 10) || 1,
+            floorAreas: floorAreas,
+            buildingArea: totalFloorArea,
+            marketValuePerSqm: parseFloat(dom.marketValuePerSqm.value) || 0,
+            percentCompleted: parseFloat(dom.percentCompleted.value) || 0,
+            assessmentLevel: parseFloat(dom.assessmentLevel.value) || 0
+          },
+
+          additionalItems: state.additionalItems,
+          calculations: calcs
+        };
+
+        try {
+          if (state.activeRecordId) {
+            // Keep original createdAt on update
+            const existing = await db.assessments.get(state.activeRecordId);
+            recordPayload.id = state.activeRecordId;
+            recordPayload.createdAt = existing ? existing.createdAt : now;
+            await db.assessments.put(recordPayload);
+            showToast('FAAS record updated successfully');
+          } else {
+            recordPayload.createdAt = now;
+            await db.assessments.add(recordPayload);
+            showToast('New FAAS record saved successfully');
+          }
+
+          resetForm();
+          showListView();
+        } catch (err) {
+          console.error('Error saving record:', err);
+          showToast('Failed to save record to Dexie DB');
+        }
+      }
+
+      async function deleteCurrentRecord() {
+        if (!state.activeRecordId) return;
+
+        const confirmDelete = window.confirm(`Are you sure you want to delete FAAS Record #${state.activeRecordId}?`);
+        if (!confirmDelete) return;
+
+        try {
+          await db.assessments.delete(state.activeRecordId);
+          showToast('Record deleted');
+          resetForm();
+          showListView();
+        } catch (err) {
+          console.error('Delete error:', err);
+          showToast('Failed to delete record');
+        }
+      }
+
+      /* ------------------------------------------------------------------------
+         11. SEED MOCK DATA SCRIPT (FOR IMMEDIATE 10-ITEM PAGINATION DEMO)
+         ------------------------------------------------------------------------ */
+      async function seedInitialDataIfEmpty() {
+        const count = await db.assessments.count();
+        if (count > 0) return;
+
+        console.info('Seeding mock FAAS data for pagination demonstration...');
+
+        const mockOwners = [
+          'Eduardo M. Santos', 'Maria Clara Bautista', 'Antonio L. Luna',
+          'Lourdes V. Reyes', 'Francisco K. Balagtas', 'Corazon A. Aquino',
+          'Josefa Llanes Escoda', 'Ramon F. Magsaysay', 'Apolinario M. Mabini',
+          'Melchora I. Aquino', 'Teodoro A. Agoncillo', 'Gregorio H. Del Pilar',
+          'Teresa M. Magbanua', 'Emilio F. Aguinaldo'
+        ];
+
+        const sampleRecords = [];
+        const baseTime = Date.now() - (mockOwners.length * 3600 * 1000 * 4);
+
+        for (let i = 0; i < mockOwners.length; i++) {
+          const numFloors = (i % 3) + 1; // 1, 2, or 3 floors
+          const baseAreaPerFloor = Math.round(((80 + (i * 15)) / numFloors) * 100) / 100;
+          const floorAreas = [];
+          for (let f = 0; f < numFloors; f++) {
+            floorAreas.push(baseAreaPerFloor);
+          }
+          const actualTotalArea = Math.round(baseAreaPerFloor * numFloors * 100) / 100;
+
+          const mv = 8000 + (i * 500);
+          const pct = 100;
+          const coreCost = Math.round((actualTotalArea * mv * (pct / 100)) / 10) * 10;
+          const hasPorch = (i % 2 === 0);
+          const addCost = hasPorch ? Math.round((12 * mv * 0.3) / 10) * 10 : 0;
+          const totalCost = Math.round((coreCost + addCost) / 10) * 10;
+          const bType = i % 2 === 0 ? 'Residential' : 'Commercial';
+          const standardAssessRate = getStandardAssessmentLevel(bType, totalCost);
+          const assessed = Math.round((totalCost * (standardAssessRate / 100)) / 10) * 10;
+
+          sampleRecords.push({
+            createdAt: baseTime + (i * 3600 * 1000 * 3),
+            updatedAt: baseTime + (i * 3600 * 1000 * 3),
+            synced: 1,
+            owner: {
+              name: mockOwners[i],
+              lotBlockNumber: `Lot ${i + 1} Blk ${((i % 5) + 1)}`,
+              mailingAddress: `Block ${((i % 4) + 1)}, Mabini St.`,
+              contactNumber: `0917-555-01${i < 10 ? '0' + i : i}`
+            },
+            valuation: {
+              buildingType: bType,
+              numberOfFloors: numFloors,
+              floorAreas: floorAreas,
+              buildingArea: actualTotalArea,
+              marketValuePerSqm: mv,
+              percentCompleted: pct,
+              assessmentLevel: standardAssessRate
+            },
+            additionalItems: hasPorch ? [
+              { type: 'Porch', area: 12, rate: 0.30, calculatedCost: addCost }
+            ] : [],
+            calculations: {
+              coreBuildingCost: coreCost,
+              additionalItemsCost: addCost,
+              totalBuildingCost: totalCost,
+              assessedValue: assessed
+            }
+          });
+        }
+
+        await db.assessments.bulkAdd(sampleRecords);
+        showToast('Loaded sample FAAS records');
+      }
+
+      /* ------------------------------------------------------------------------
+         12. EVENT LISTENERS & INITIALIZATION
+         ------------------------------------------------------------------------ */
+      function setupListeners() {
+        // Search & Sort in dashboard
+        dom.inputSearch.addEventListener('input', (e) => {
+          state.searchQuery = e.target.value;
+          state.currentPage = 1;
+          refreshDashboard();
+        });
+
+        dom.selectSort.addEventListener('change', (e) => {
+          state.sortOrder = e.target.value;
+          state.currentPage = 1;
+          refreshDashboard();
+        });
+
+        // View navigation
+        dom.fabCreate.addEventListener('click', () => {
+          resetForm();
+          showFormView(false);
+        });
+
+        dom.btnCancel.addEventListener('click', () => {
+          resetForm();
+          showListView();
+        });
+
+        dom.btnCancelTop.addEventListener('click', () => {
+          resetForm();
+          showListView();
+        });
+
+        // Pagination buttons
+        dom.btnPrev.addEventListener('click', () => {
+          if (state.currentPage > 1) {
+            state.currentPage--;
+            refreshDashboard();
+          }
+        });
+
+        dom.btnNext.addEventListener('click', () => {
+          if (state.currentPage < state.totalPages) {
+            state.currentPage++;
+            refreshDashboard();
+          }
+        });
+
+        // Floor count listener
+        dom.numberOfFloors.addEventListener('input', onFloorsCountChange);
+
+        // Building type change updates assessment schedule
+        dom.buildingType.addEventListener('change', () => {
+          state.isAssessmentLevelManual = false;
+          calculateValues();
+        });
+
+        // Assessment level manual edit listener
+        dom.assessmentLevel.addEventListener('input', () => {
+          state.isAssessmentLevelManual = true;
+          calculateValues();
+        });
+
+        // Reapply schedule button
+        if (dom.btnReapplySchedule) {
+          dom.btnReapplySchedule.addEventListener('click', () => {
+            state.isAssessmentLevelManual = false;
+            calculateValues();
+            showToast('Re-applied schedule assessment level');
+          });
+        }
+
+        // Dynamic item controls
+        dom.btnAddItem.addEventListener('click', addSubItem);
+
+        // Live calculation triggers
+        const calcTriggers = document.querySelectorAll('.calc-trigger');
+        calcTriggers.forEach(input => {
+          input.addEventListener('input', calculateValues);
+        });
+
+        // Form actions
+        dom.btnSave.addEventListener('click', saveCurrentRecord);
+        dom.btnDelete.addEventListener('click', deleteCurrentRecord);
+      }
+
+      // Initialize App
+      async function init() {
+        renderFloorInputs(1, ['']);
+        setupListeners();
+        try {
+          await seedInitialDataIfEmpty();
+          await refreshDashboard();
+        } catch (err) {
+          console.error('Initialization error:', err);
+        }
+      }
+
+      // Run on DOM load
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+      } else {
+        init();
+      }
+
+    })();
+  </script>
+</body>
+
+</html>
