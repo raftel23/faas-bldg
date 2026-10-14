@@ -717,6 +717,71 @@
       background: #fef3c7;
       color: #92400e;
     }
+
+    /* ==========================================================================
+       DELETE CONFIRMATION MODAL & CARD BUTTONS
+       ========================================================================== */
+    .btn-card-delete {
+      background: #fff1f0;
+      border: 1px solid #ffccc7;
+      color: #cf1322;
+      width: 32px;
+      height: 32px;
+      border-radius: var(--radius-sm);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.95rem;
+      cursor: pointer;
+      touch-action: manipulation;
+      transition: all 0.15s ease;
+      flex-shrink: 0;
+      padding: 0;
+    }
+
+    .btn-card-delete:hover,
+    .btn-card-delete:active {
+      background: #ff4d4f;
+      color: #ffffff;
+      border-color: #ff4d4f;
+    }
+
+    .modal-backdrop {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: rgba(15, 23, 42, 0.65);
+      backdrop-filter: blur(2px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 2000;
+      padding: 16px;
+      box-sizing: border-box;
+    }
+
+    .modal-backdrop.hidden {
+      display: none !important;
+    }
+
+    .modal-card {
+      background: #ffffff;
+      border-radius: var(--radius-md);
+      box-shadow: var(--shadow-float);
+      width: 100%;
+      max-width: 380px;
+      padding: 22px 20px;
+      text-align: center;
+      box-sizing: border-box;
+      animation: modalPopIn 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    }
+
+    @keyframes modalPopIn {
+      from { transform: scale(0.92); opacity: 0; }
+      to { transform: scale(1); opacity: 1; }
+    }
   </style>
 </head>
 
@@ -791,10 +856,16 @@
       <div id="form-mode-badge" class="mode-indicator">
         <span>●</span> <span id="form-mode-text">New Record Mode</span>
       </div>
-      <button id="btn-cancel-top" class="btn-ghost" style="height: 32px; padding: 0 10px; font-size: 0.78rem;"
-        type="button">
-        ✕ Back to List
-      </button>
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <button id="btn-delete-top" class="btn-danger hidden" style="height: 32px; padding: 0 10px; font-size: 0.78rem; border-color: #ffccc7; color: #cf1322;"
+          type="button">
+          🗑️ Delete
+        </button>
+        <button id="btn-cancel-top" class="btn-ghost" style="height: 32px; padding: 0 10px; font-size: 0.78rem;"
+          type="button">
+          ✕ Back to List
+        </button>
+      </div>
     </div>
 
     <form id="faas-form" autocomplete="off" onsubmit="return false;">
@@ -971,6 +1042,25 @@
   <!-- Notification Toast -->
   <div id="toast" role="alert" aria-live="polite">Notification message</div>
 
+  <!-- In-App Delete Confirmation Modal -->
+  <div id="delete-confirm-modal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="delete-modal-title">
+    <div class="modal-card">
+      <div style="font-size: 2.2rem; margin-bottom: 6px;">🗑️</div>
+      <h3 id="delete-modal-title" style="margin-bottom: 6px; font-size: 1.1rem; color: #1e293b;">Delete FAAS Record?</h3>
+      <p id="delete-modal-desc" style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 20px; line-height: 1.4;">
+        Are you sure you want to permanently delete this FAAS assessment record? This action cannot be undone.
+      </p>
+      <div style="display: flex; gap: 10px; justify-content: center;">
+        <button id="btn-cancel-delete" type="button" class="btn-ghost" style="flex: 1; height: 42px;">
+          Cancel
+        </button>
+        <button id="btn-confirm-delete" type="button" class="btn-danger" style="flex: 1; height: 42px; background: #e02424; color: #ffffff; border: none;">
+          Yes, Delete
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- ==========================================================================
        JAVASCRIPT: CONTROLLER, STORAGE & CALCULATION ENGINE
        ========================================================================== -->
@@ -1053,8 +1143,15 @@
         // Action buttons
         btnSave: document.getElementById('btn-save-record'),
         btnDelete: document.getElementById('btn-delete-record'),
+        btnDeleteTop: document.getElementById('btn-delete-top'),
         btnCancel: document.getElementById('btn-cancel-form'),
-        btnCancelTop: document.getElementById('btn-cancel-top')
+        btnCancelTop: document.getElementById('btn-cancel-top'),
+
+        // Delete Confirmation Modal
+        deleteModal: document.getElementById('delete-confirm-modal'),
+        deleteModalDesc: document.getElementById('delete-modal-desc'),
+        btnConfirmDelete: document.getElementById('btn-confirm-delete'),
+        btnCancelDelete: document.getElementById('btn-cancel-delete')
       };
 
       /* ------------------------------------------------------------------------
@@ -1114,10 +1211,12 @@
           dom.formModeBadge.classList.add('editing');
           dom.formModeText.textContent = `Editing FAAS Record #${state.activeRecordId}`;
           dom.btnDelete.classList.remove('hidden');
+          if (dom.btnDeleteTop) dom.btnDeleteTop.classList.remove('hidden');
         } else {
           dom.formModeBadge.classList.remove('editing');
           dom.formModeText.textContent = 'New Record Mode';
           dom.btnDelete.classList.add('hidden');
+          if (dom.btnDeleteTop) dom.btnDeleteTop.classList.add('hidden');
         }
       }
 
@@ -1482,7 +1581,12 @@
           item.innerHTML = `
             <div class="record-row-top">
               <span class="record-owner">👤 ${escapeHtml(rec.owner?.name || 'Unnamed Owner')}</span>
-              <span class="badge-btype">${bTypeIcon} ${escapeHtml(bType)}</span>
+              <div style="display: flex; align-items: center; gap: 6px;">
+                <span class="badge-btype">${bTypeIcon} ${escapeHtml(bType)}</span>
+                <button type="button" class="btn-card-delete" data-id="${rec.id}" data-name="${escapeHtml(rec.owner?.name || '')}" title="Delete Record" aria-label="Delete Record">
+                  🗑️
+                </button>
+              </div>
             </div>
             <div class="record-row-mid">
               <span>📍 Lot &amp; Blk: <strong>${escapeHtml(lotBlock)}</strong></span>
@@ -1495,7 +1599,22 @@
             </div>
           `;
 
-          item.addEventListener('click', () => loadRecordForEdit(rec.id));
+          // Card click opens edit view unless delete button was pressed
+          item.addEventListener('click', (e) => {
+            if (e.target.closest('.btn-card-delete')) return;
+            loadRecordForEdit(rec.id);
+          });
+
+          // Delete button in card handles standalone direct deletion
+          const btnCardDel = item.querySelector('.btn-card-delete');
+          if (btnCardDel) {
+            btnCardDel.addEventListener('click', (e) => {
+              e.stopPropagation();
+              e.preventDefault();
+              promptDeleteRecord(rec.id, rec.owner?.name || '');
+            });
+          }
+
           dom.recordsContainer.appendChild(item);
         });
       }
@@ -1662,20 +1781,57 @@
         }
       }
 
-      async function deleteCurrentRecord() {
-        if (!state.activeRecordId) return;
+      /* ------------------------------------------------------------------------
+         10.5 IN-APP MODAL RECORD DELETION
+         ------------------------------------------------------------------------ */
+      let pendingDeleteId = null;
 
-        const confirmDelete = window.confirm(`Are you sure you want to delete FAAS Record #${state.activeRecordId}?`);
-        if (!confirmDelete) return;
+      function promptDeleteRecord(id, ownerName = '') {
+        const numericId = Number(id);
+        if (!numericId || isNaN(numericId)) {
+          showToast('Invalid record ID');
+          return;
+        }
+
+        pendingDeleteId = numericId;
+        const nameText = ownerName ? `for <strong>${escapeHtml(ownerName)}</strong> (Record #${numericId})` : `Record #${numericId}`;
+        if (dom.deleteModalDesc) {
+          dom.deleteModalDesc.innerHTML = `Are you sure you want to permanently delete the FAAS record ${nameText}? This action cannot be undone.`;
+        }
+        if (dom.deleteModal) {
+          dom.deleteModal.classList.remove('hidden');
+        }
+      }
+
+      function closeDeleteModal() {
+        pendingDeleteId = null;
+        if (dom.deleteModal) {
+          dom.deleteModal.classList.add('hidden');
+        }
+      }
+
+      async function confirmDeleteRecord() {
+        if (!pendingDeleteId) {
+          closeDeleteModal();
+          return;
+        }
+
+        const idToDelete = pendingDeleteId;
+        closeDeleteModal();
 
         try {
-          await db.assessments.delete(state.activeRecordId);
-          showToast('Record deleted');
-          resetForm();
-          showListView();
+          await db.assessments.delete(idToDelete);
+          showToast(`Record #${idToDelete} deleted successfully`);
+
+          if (state.activeRecordId === idToDelete) {
+            resetForm();
+            showListView();
+          } else {
+            await refreshDashboard();
+          }
         } catch (err) {
           console.error('Delete error:', err);
-          showToast('Failed to delete record');
+          showToast('Failed to delete record: ' + (err.message || 'Unknown error'));
         }
       }
 
@@ -1836,7 +1992,36 @@
 
         // Form actions
         dom.btnSave.addEventListener('click', saveCurrentRecord);
-        dom.btnDelete.addEventListener('click', deleteCurrentRecord);
+
+        // Delete buttons in form (bottom & top header)
+        const onFormDeleteClick = () => {
+          const id = state.activeRecordId || (dom.recordId.value ? parseInt(dom.recordId.value, 10) : null);
+          if (!id) {
+            showToast('No record loaded to delete');
+            return;
+          }
+          promptDeleteRecord(id, dom.ownerName.value);
+        };
+
+        if (dom.btnDelete) dom.btnDelete.addEventListener('click', onFormDeleteClick);
+        if (dom.btnDeleteTop) dom.btnDeleteTop.addEventListener('click', onFormDeleteClick);
+
+        // Delete Modal actions
+        if (dom.btnConfirmDelete) dom.btnConfirmDelete.addEventListener('click', confirmDeleteRecord);
+        if (dom.btnCancelDelete) dom.btnCancelDelete.addEventListener('click', closeDeleteModal);
+
+        if (dom.deleteModal) {
+          dom.deleteModal.addEventListener('click', (e) => {
+            if (e.target === dom.deleteModal) closeDeleteModal();
+          });
+        }
+
+        // Global Escape key closes delete modal
+        window.addEventListener('keydown', (e) => {
+          if (e.key === 'Escape' && dom.deleteModal && !dom.deleteModal.classList.contains('hidden')) {
+            closeDeleteModal();
+          }
+        });
 
         // PWA Installation handling
         let deferredPrompt;
