@@ -887,7 +887,7 @@
         </div>
         <p class="helper-text" style="margin-bottom: 10px;">
           Porch, Terrace, Balcony &amp; Car Port compute at 30% or 40% of Core Base Market Value. Tiles compute at
-          ₱100/piece.
+          ₱400/piece.
         </p>
 
         <!-- Container for dynamically added sub-items -->
@@ -902,7 +902,7 @@
             <option value="Terrace">Terrace (Area x Base MV x Rate)</option>
             <option value="Balcony">Balcony (Area x Base MV x Rate)</option>
             <option value="Car Port">Car Port (Area x Base MV x Rate)</option>
-            <option value="Tiles">Tiles (Pieces x ₱100)</option>
+            <option value="Tiles">Tiles (Pieces x ₱400)</option>
           </select>
           <button id="btn-add-item" type="button" class="btn-secondary" style="flex: 1;">
             + Add Sub-Item
@@ -933,7 +933,7 @@
       <div class="summary-card">
         <div class="summary-title">
           <span>Formula Engine Calculations</span>
-          <span style="font-size: 0.7rem; color: #a4c9eb;">Live • Rounded to 10s</span>
+          <span style="font-size: 0.7rem; color: #a4c9eb;">Live • Unrounded Total (Assessed Value Rounded to 10s)</span>
         </div>
         <div class="summary-row">
           <span>Core Building Cost:</span>
@@ -1066,8 +1066,11 @@
       }
 
       function formatCurrency(val) {
-        const rounded = roundNearest10(val);
-        return '₱ ' + rounded.toLocaleString('en-PH');
+        if (!val || isNaN(val)) return '₱ 0';
+        return '₱ ' + Number(val).toLocaleString('en-PH', {
+          minimumFractionDigits: (val % 1 !== 0) ? 2 : 0,
+          maximumFractionDigits: 2
+        });
       }
 
       function showToast(message, duration = 2400) {
@@ -1151,16 +1154,15 @@
         const pctComp = parseFloat(dom.percentCompleted.value) || 0;
         const bType = dom.buildingType ? dom.buildingType.value : 'Residential';
 
-        // Core_Building_Cost = Building Area * Market Value per sqm * (Percent Construction Completed / 100)
-        const coreRaw = area * mvPerSqm * (pctComp / 100);
-        const coreRounded = roundNearest10(coreRaw);
+        // Core_Building_Cost = Building Area * Market Value per sqm * (Percent Construction Completed / 100) (Unrounded)
+        const coreBuildingCost = area * mvPerSqm * (pctComp / 100);
 
-        // Additional Items Calculation
+        // Additional Items Calculation (Unrounded)
         let addCostSum = 0;
         state.additionalItems.forEach((item, index) => {
           let itemCost = 0;
           if (item.type === 'Tiles') {
-            // Formula = Pieces * 100
+            // Formula = Pieces * 400
             const pieces = parseFloat(item.quantity) || 0;
             itemCost = pieces * 400;
           } else {
@@ -1180,10 +1182,10 @@
           }
         });
 
-        const addItemsRounded = roundNearest10(addCostSum);
+        const additionalItemsCost = addCostSum;
 
-        // Total Building Cost = Core_Building_Cost + Additional_Items_Cost (Round to nearest 10)
-        const totalBuildingCost = roundNearest10(coreRounded + addItemsRounded);
+        // Total Building Cost = Core_Building_Cost + Additional_Items_Cost (Unrounded)
+        const totalBuildingCost = coreBuildingCost + additionalItemsCost;
 
         // Auto-determine Assessment Level from schedule if not manually customized
         const standardRate = getStandardAssessmentLevel(bType, totalBuildingCost);
@@ -1193,8 +1195,9 @@
 
         const assessPct = parseFloat(dom.assessmentLevel.value) || 0;
 
-        // Assessment Value = Total Building Cost * (Assessment Level Percentage / 100) (Round to nearest 10)
-        const assessedValue = roundNearest10(totalBuildingCost * (assessPct / 100));
+        // Assessment Value = roundNearest10(roundNearest10(Total Building Cost) * (Assessment Level / 100))
+        const baseForAssessment = roundNearest10(totalBuildingCost);
+        const assessedValue = roundNearest10(baseForAssessment * (assessPct / 100));
 
         // Update helper guide text
         if (dom.assessmentGuideNote) {
@@ -1206,15 +1209,15 @@
         }
 
         // Render to UI
-        dom.dispCoreCost.value = formatCurrency(coreRounded);
-        dom.summaryCoreCost.textContent = formatCurrency(coreRounded);
-        dom.summaryAddCost.textContent = formatCurrency(addItemsRounded);
+        dom.dispCoreCost.value = formatCurrency(coreBuildingCost);
+        dom.summaryCoreCost.textContent = formatCurrency(coreBuildingCost);
+        dom.summaryAddCost.textContent = formatCurrency(additionalItemsCost);
         dom.summaryTotalCost.textContent = formatCurrency(totalBuildingCost);
         dom.summaryAssessedValue.textContent = formatCurrency(assessedValue);
 
         return {
-          coreBuildingCost: coreRounded,
-          additionalItemsCost: addItemsRounded,
+          coreBuildingCost: coreBuildingCost,
+          additionalItemsCost: additionalItemsCost,
           totalBuildingCost: totalBuildingCost,
           assessmentLevel: assessPct,
           assessedValue: assessedValue
@@ -1251,7 +1254,7 @@
                 <div class="form-group">
                   <label class="form-label">Number of Pieces (Count)</label>
                   <input type="number" min="0" step="1" class="form-control item-pieces-input" data-index="${index}" value="${item.quantity || ''}" placeholder="e.g., 250" />
-                  <span class="helper-text">Standard Rate: ₱100.00 per piece</span>
+                  <span class="helper-text">Standard Rate: ₱400.00 per piece</span>
                 </div>
               </div>
               <div class="item-subtotal-badge">Subtotal: <span id="item-subtotal-${index}">${formatCurrency(item.calculatedCost || 0)}</span></div>
