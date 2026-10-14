@@ -4,9 +4,20 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>FAAS Building Appraisal - Mobile Prototype</title>
-  <!-- Dexie.js for lightweight, asynchronous IndexedDB storage -->
-  <script src="https://unpkg.com/dexie@latest/dist/dexie.js"></script>
+  <title>FAAS Building Appraisal - Offline PWA</title>
+
+  <!-- PWA Manifest & App Metadata -->
+  <link rel="manifest" href="manifest.json" />
+  <meta name="theme-color" content="#005a9e" />
+  <meta name="description" content="Offline Field Appraisal and Assessment Sheet Guide for Buildings" />
+  <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png" />
+  <link rel="apple-touch-icon" href="icon-192.png" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="FAAS Appraisal" />
+
+  <!-- Local Dexie.js for 100% offline, standalone IndexedDB storage -->
+  <script src="dexie.min.js"></script>
 
   <style>
     /* ==========================================================================
@@ -715,6 +726,13 @@
        MAIN LIST VIEW (DASHBOARD)
        ========================================================================== -->
   <main id="view-list" class="view-container">
+    <!-- PWA Install Prompt Button (Shown when browser supports installation) -->
+    <button id="btn-install-app" class="btn-primary hidden" type="button"
+      style="width: 100%; margin-bottom: 12px; padding: 10px; font-size: 0.88rem; display: flex; align-items: center; justify-content: center; gap: 8px;">
+      <span>📲</span>
+      <span>Install FAAS App to Home Screen</span>
+    </button>
+
     <!-- Top Summary Pills -->
     <div class="dashboard-stats">
       <div class="stat-pill">
@@ -998,6 +1016,7 @@
         statTotal: document.getElementById('stat-total-records'),
         inputSearch: document.getElementById('input-search-records'),
         selectSort: document.getElementById('select-sort-order'),
+        btnInstall: document.getElementById('btn-install-app'),
         toast: document.getElementById('toast'),
 
         // Form elements
@@ -1815,6 +1834,31 @@
         // Form actions
         dom.btnSave.addEventListener('click', saveCurrentRecord);
         dom.btnDelete.addEventListener('click', deleteCurrentRecord);
+
+        // PWA Installation handling
+        let deferredPrompt;
+        window.addEventListener('beforeinstallprompt', (e) => {
+          e.preventDefault();
+          deferredPrompt = e;
+          if (dom.btnInstall) {
+            dom.btnInstall.classList.remove('hidden');
+            dom.btnInstall.addEventListener('click', async () => {
+              if (deferredPrompt) {
+                deferredPrompt.prompt();
+                const { outcome } = await deferredPrompt.userChoice;
+                if (outcome === 'accepted') {
+                  dom.btnInstall.classList.add('hidden');
+                }
+                deferredPrompt = null;
+              }
+            });
+          }
+        });
+
+        window.addEventListener('appinstalled', () => {
+          if (dom.btnInstall) dom.btnInstall.classList.add('hidden');
+          showToast('FAAS App installed to Home Screen!');
+        });
       }
 
       // Initialize App
@@ -1827,6 +1871,17 @@
         } catch (err) {
           console.error('Initialization error:', err);
         }
+      }
+
+      // Register Service Worker for 100% Offline PWA functionality
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('./sw.js').then((reg) => {
+            console.log('FAAS ServiceWorker registered with scope:', reg.scope);
+          }).catch((err) => {
+            console.warn('FAAS ServiceWorker registration failed:', err);
+          });
+        });
       }
 
       // Run on DOM load
