@@ -932,8 +932,8 @@
       <!-- LIVE CALCULATION SUMMARY DASHBOARD CARD -->
       <div class="summary-card">
         <div class="summary-title">
-          <span>Formula Engine Calculations</span>
-          <span style="font-size: 0.7rem; color: #a4c9eb;">Live • Unrounded Total (Assessed Value Rounded to 10s)</span>
+          <span>Assessed Market Value</span>
+          <!-- <span style="font-size: 0.7rem; color: #a4c9eb;">Live • Unrounded Total (Assessed Value Rounded to 10s)</span> -->
         </div>
         <div class="summary-row">
           <span>Core Building Cost:</span>
@@ -1195,9 +1195,9 @@
 
         const assessPct = parseFloat(dom.assessmentLevel.value) || 0;
 
-        // Assessment Value = roundNearest10(roundNearest10(Total Building Cost) * (Assessment Level / 100))
-        const baseForAssessment = roundNearest10(totalBuildingCost);
-        const assessedValue = roundNearest10(baseForAssessment * (assessPct / 100));
+        // Assessed Value = round to nearest 10 strictly at the end
+        // Assessed Value = roundNearest10(Total Building Cost * (Assessment Level / 100))
+        const assessedValue = roundNearest10(totalBuildingCost * (assessPct / 100));
 
         // Update helper guide text
         if (dom.assessmentGuideNote) {
@@ -1710,13 +1710,13 @@
 
           const mv = 8000 + (i * 500);
           const pct = 100;
-          const coreCost = Math.round((actualTotalArea * mv * (pct / 100)) / 10) * 10;
+          const coreCost = actualTotalArea * mv * (pct / 100);
           const hasPorch = (i % 2 === 0);
-          const addCost = hasPorch ? Math.round((12 * mv * 0.3) / 10) * 10 : 0;
-          const totalCost = Math.round((coreCost + addCost) / 10) * 10;
+          const addCost = hasPorch ? (12 * mv * 0.3) : 0;
+          const totalCost = coreCost + addCost;
           const bType = i % 2 === 0 ? 'Residential' : 'Commercial';
           const standardAssessRate = getStandardAssessmentLevel(bType, totalCost);
-          const assessed = Math.round((totalCost * (standardAssessRate / 100)) / 10) * 10;
+          const assessed = roundNearest10(totalCost * (standardAssessRate / 100));
 
           sampleRecords.push({
             createdAt: baseTime + (i * 3600 * 1000 * 3),

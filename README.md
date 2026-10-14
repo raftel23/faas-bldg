@@ -19,7 +19,7 @@ A standalone, lightweight, mobile-first Progressive Web App (PWA) prototype for 
   - Fully editable for manual override with an auto-fill reset option.
 - **Precise Rounding**:
   - Core, additional items, and total costs remain exact and unrounded.
-  - Assessed Value applies `roundNearest10(Total Building Cost) * Assessment Level %`, with the final assessed value rounded to the nearest 10.
+  - Assessed Value applies `roundNearest10(Total Building Cost * Assessment Level %)`, rounding only at the final Assessed Value.
 
 ## How to Install as an App
 1. **GitHub Pages / HTTPS Hosting**:
